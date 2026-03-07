@@ -491,28 +491,40 @@ def main() -> None:
     branch_name = ""
     base_branch = base_branch_override or context.repository.default_branch
     pr_url = ""
+    # Track whether we need to create a PR at the end (issues / agent without entity)
+    needs_pr = False
 
-    try:
-        if mode_result.mode == Mode.TAG:
-            if context.entity and not context.entity.is_pull_request:
-                # Issue: create new branch
-                branch_name = _prepare_tag_mode_issue(context, branch_prefix, base_branch)
-            elif context.entity and context.entity.is_pull_request:
-                # PR: checkout the PR's branch
-                branch_name = _prepare_tag_mode_pr(context)
-        elif mode_result.mode == Mode.REVIEW:
-            # Review: checkout PR branch (read-only, but may push fixes)
-            if context.entity and context.entity.head_ref:
-                branch_name = _prepare_tag_mode_pr(context)
-        elif mode_result.mode == Mode.AGENT:
-            # Agent mode: work on current branch or create one
-            git_setup_identity()
-            if context.entity and not context.entity.is_pull_request:
-                branch_name = _prepare_tag_mode_issue(context, branch_prefix, base_branch)
-            else:
-                branch_name = os.environ.get("GITHUB_REF_NAME", "main")
-    except Exception:
-        logger.warning("Branch preparation failed, working on current HEAD", exc_info=True)
+    is_issue = (
+        context.entity is not None
+        and not context.entity.is_pull_request
+    )
+    is_pr = (
+        context.entity is not None
+        and context.entity.is_pull_request
+    )
+
+    if is_issue:
+        # Issues ALWAYS get a new branch — fail hard if we can't create one,
+        # because we must never push to the default branch.
+        branch_name = _prepare_tag_mode_issue(context, branch_prefix, base_branch)
+        needs_pr = True
+        logger.info("Created branch %s for issue #%d", branch_name, context.entity.number)
+    elif is_pr:
+        # PRs: checkout the PR's existing head branch
+        branch_name = _prepare_tag_mode_pr(context)
+        needs_pr = False
+    elif mode_result.mode == Mode.AGENT and not context.entity:
+        # Agent mode without entity (workflow_dispatch, schedule, etc.):
+        # create a branch so we never touch the default branch.
+        git_setup_identity()
+        branch_name = _generate_branch_name("agent", 0, prefix=branch_prefix)
+        git_checkout_new_branch(branch_name)
+        needs_pr = True
+        logger.info("Created branch %s for agent mode", branch_name)
+    else:
+        # Review mode or other — work on whatever branch we're on
+        git_setup_identity()
+        branch_name = os.environ.get("GITHUB_REF_NAME", base_branch)
 
     _set_output("branch_name", branch_name)
     logger.info("Working branch: %s", branch_name or "(current)")
@@ -567,16 +579,13 @@ def main() -> None:
             issue_number=context.entity.number if context.entity else None,
         )
 
-        # Create PR if this was an issue-triggered run with changes
-        if (
-            sha
-            and context.entity
-            and not context.entity.is_pull_request
-            and mode_result.mode in (Mode.TAG, Mode.AGENT)
-        ):
+        # Create PR if we're on a fresh branch that needs one
+        if sha and needs_pr and branch_name:
             pr_url = _maybe_create_pr(context, branch_name, base_branch)
             if pr_url:
                 _set_output("pr_url", pr_url)
+        elif not sha and needs_pr:
+            logger.info("No changes were made — skipping PR creation")
 
     # Phase 9: Update progress comment
     logger.info("Phase 9: Updating progress comment")

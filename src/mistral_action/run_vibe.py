@@ -236,9 +236,25 @@ def run_vibe(config: VibeConfig) -> VibeResult:
         stdout = result.stdout
         stderr = result.stderr
 
+        # Filter out harmless asyncio cleanup noise that Vibe emits on exit
+        stderr_lines = stderr.splitlines() if stderr else []
+        stderr_filtered = "\n".join(
+            line for line in stderr_lines
+            if not any(noise in line for noise in (
+                "Event loop is closed",
+                "BaseSubprocessTransport.__del__",
+                "Exception ignored in:",
+                "base_subprocess.py",
+                "unix_events.py",
+                "base_events.py",
+                "self._check_closed()",
+                "RuntimeError:",
+            ))
+        ).strip()
+
         logger.info("Vibe exit code: %d", result.returncode)
-        if stderr:
-            logger.info("Vibe stderr:\n%s", stderr[:2000])
+        if stderr_filtered:
+            logger.info("Vibe stderr:\n%s", stderr_filtered[:2000])
 
         # Parse output
         output_json = None
@@ -259,7 +275,7 @@ def run_vibe(config: VibeConfig) -> VibeResult:
                 conclusion=Conclusion.FAILURE,
                 output=stdout,
                 output_json=output_json if isinstance(output_json, list) else None,
-                error=stderr or f"Vibe exited with code {result.returncode}",
+                error=stderr_filtered or f"Vibe exited with code {result.returncode}",
             )
 
     finally:
