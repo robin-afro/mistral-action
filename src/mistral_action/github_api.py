@@ -420,6 +420,23 @@ def git_current_sha() -> str:
     return result.stdout.strip()
 
 
+def git_current_branch() -> str:
+    """Get the name of the current branch.
+
+    Used after Vibe runs to detect if the agent renamed the branch
+    (e.g. from ``mistral/issue-42-1720000000`` to ``mistral/fix-login-redirect``).
+    """
+    result = subprocess.run(
+        ["git", "branch", "--show-current"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0 and result.stdout.strip():
+        return result.stdout.strip()
+    # Fallback: detached HEAD or error
+    return ""
+
+
 def git_has_new_commits(since_sha: str) -> bool:
     """Check if there are any new commits since the given SHA.
 

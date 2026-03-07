@@ -37,6 +37,7 @@ from mistral_action.github_api import (
     git_checkout_branch,
     git_checkout_new_branch,
     git_commit,
+    git_current_branch,
     git_current_sha,
     git_fetch_branch,
     git_has_changes,
@@ -692,6 +693,17 @@ def main() -> None:
 
     logger.info("=" * 60)
     logger.info("Vibe finished: %s", vibe_result.conclusion.value)
+
+    # Re-read the branch name — the agent may have renamed it (issues only).
+    # For PRs we keep the original name no matter what.
+    if is_issue or (not is_pr and needs_pr):
+        actual_branch = git_current_branch()
+        if actual_branch and actual_branch != branch_name:
+            logger.info(
+                "Agent renamed branch: %s → %s", branch_name, actual_branch
+            )
+            branch_name = actual_branch
+            _set_output("branch_name", branch_name)
 
     # Phase 8: Handle results
     logger.info("Phase 8: Handling results")

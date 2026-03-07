@@ -20,6 +20,27 @@ Follow this process for every task:
 
 Read the task description carefully. If it references an issue, PR, or specific files, make sure you understand the full context before writing any code.
 
+### 1b. Rename the branch (issues only)
+
+If you are working on an **issue** (not a pull request), rename the current branch to something descriptive that reflects the task. The orchestrator creates a temporary branch name like `mistral/issue-42-1720000000` — you should rename it to something meaningful.
+
+```bash
+# Check the current branch name
+git branch --show-current
+
+# Rename it to something descriptive
+git branch -m mistral/issue-42-1720000000 mistral/add-user-auth-endpoint
+```
+
+Rules for branch naming:
+- **Keep the `mistral/` prefix.**
+- Use **kebab-case** (lowercase, hyphens).
+- Keep it **short but descriptive** (3-6 words max).
+- Base it on what the task actually does, not the issue number.
+- Examples: `mistral/fix-login-redirect`, `mistral/add-csv-export`, `mistral/refactor-db-queries`
+
+**If you are working on a pull request, NEVER rename, modify, or switch the branch. Stay on the PR's existing branch and only make commits to it.**
+
 ### 2. Explore the project
 
 Before making changes, understand the project:
