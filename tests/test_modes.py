@@ -79,18 +79,18 @@ class TestIssueCommentTagMode:
         ctx = _make_context(
             event_name=EventType.ISSUE_COMMENT,
             action="created",
-            comment_body="@mistral please fix this bug",
+            comment_body="@mistralai please fix this bug",
         )
-        result = detect_mode(ctx, trigger_phrase="@mistral")
+        result = detect_mode(ctx, trigger_phrase="@mistralai")
         assert result.mode == Mode.TAG
 
     def test_trigger_phrase_case_insensitive(self):
         ctx = _make_context(
             event_name=EventType.ISSUE_COMMENT,
             action="created",
-            comment_body="@Mistral review this code",
+            comment_body="@Mistralai review this code",
         )
-        result = detect_mode(ctx, trigger_phrase="@mistral")
+        result = detect_mode(ctx, trigger_phrase="@mistralai")
         assert result.mode == Mode.TAG
 
     def test_custom_trigger_phrase(self):
@@ -108,7 +108,7 @@ class TestIssueCommentTagMode:
             action="created",
             comment_body="This is a normal comment without any trigger",
         )
-        result = detect_mode(ctx, trigger_phrase="@mistral")
+        result = detect_mode(ctx, trigger_phrase="@mistralai")
         assert result.mode == Mode.SKIP
 
     def test_trigger_on_pr_comment(self):
@@ -116,9 +116,9 @@ class TestIssueCommentTagMode:
             event_name=EventType.ISSUE_COMMENT,
             action="created",
             entity_type=EntityType.PULL_REQUEST,
-            comment_body="@mistral fix the tests",
+            comment_body="@mistralai fix the tests",
         )
-        result = detect_mode(ctx, trigger_phrase="@mistral")
+        result = detect_mode(ctx, trigger_phrase="@mistralai")
         assert result.mode == Mode.TAG
         assert "PR" in result.reason
 
@@ -127,9 +127,9 @@ class TestIssueCommentTagMode:
             event_name=EventType.ISSUE_COMMENT,
             action="created",
             entity_type=EntityType.ISSUE,
-            comment_body="@mistral implement this",
+            comment_body="@mistralai implement this",
         )
-        result = detect_mode(ctx, trigger_phrase="@mistral")
+        result = detect_mode(ctx, trigger_phrase="@mistralai")
         assert result.mode == Mode.TAG
         assert "issue" in result.reason
 
@@ -145,9 +145,9 @@ class TestPRReviewCommentTagMode:
             event_name=EventType.PULL_REQUEST_REVIEW_COMMENT,
             action="created",
             entity_type=EntityType.PULL_REQUEST,
-            comment_body="@mistral this variable name is wrong",
+            comment_body="@mistralai this variable name is wrong",
         )
-        result = detect_mode(ctx, trigger_phrase="@mistral")
+        result = detect_mode(ctx, trigger_phrase="@mistralai")
         assert result.mode == Mode.TAG
 
     def test_no_trigger_in_review_comment_skips(self):
@@ -157,7 +157,7 @@ class TestPRReviewCommentTagMode:
             entity_type=EntityType.PULL_REQUEST,
             comment_body="Good catch, let me fix that",
         )
-        result = detect_mode(ctx, trigger_phrase="@mistral")
+        result = detect_mode(ctx, trigger_phrase="@mistralai")
         assert result.mode == Mode.SKIP
 
 
@@ -171,20 +171,20 @@ class TestIssueEventTagMode:
         ctx = _make_context(
             event_name=EventType.ISSUES,
             action="opened",
-            entity_body="@mistral please implement this feature",
+            entity_body="@mistralai please implement this feature",
             has_comment=False,
         )
-        result = detect_mode(ctx, trigger_phrase="@mistral")
+        result = detect_mode(ctx, trigger_phrase="@mistralai")
         assert result.mode == Mode.TAG
 
     def test_trigger_in_issue_body_on_edit(self):
         ctx = _make_context(
             event_name=EventType.ISSUES,
             action="edited",
-            entity_body="@mistral updated requirements",
+            entity_body="@mistralai updated requirements",
             has_comment=False,
         )
-        result = detect_mode(ctx, trigger_phrase="@mistral")
+        result = detect_mode(ctx, trigger_phrase="@mistralai")
         assert result.mode == Mode.TAG
 
     def test_assignee_trigger(self):
@@ -224,7 +224,7 @@ class TestIssueEventTagMode:
             entity_body="Just a normal issue without any AI trigger",
             has_comment=False,
         )
-        result = detect_mode(ctx, trigger_phrase="@mistral")
+        result = detect_mode(ctx, trigger_phrase="@mistralai")
         assert result.mode == Mode.SKIP
 
     def test_label_trigger_only_on_labeled_action(self):
@@ -236,7 +236,7 @@ class TestIssueEventTagMode:
             entity_body="Normal issue body",
             has_comment=False,
         )
-        result = detect_mode(ctx, trigger_phrase="@mistral", label_trigger="mistral")
+        result = detect_mode(ctx, trigger_phrase="@mistralai", label_trigger="mistral")
         assert result.mode == Mode.SKIP
 
 
@@ -254,7 +254,7 @@ class TestReviewMode:
             entity_head_ref="feature-branch",
             has_comment=False,
         )
-        result = detect_mode(ctx, trigger_phrase="@mistral")
+        result = detect_mode(ctx, trigger_phrase="@mistralai")
         assert result.mode == Mode.REVIEW
 
     def test_pr_synchronize(self):
@@ -265,7 +265,7 @@ class TestReviewMode:
             entity_head_ref="feature-branch",
             has_comment=False,
         )
-        result = detect_mode(ctx, trigger_phrase="@mistral")
+        result = detect_mode(ctx, trigger_phrase="@mistralai")
         assert result.mode == Mode.REVIEW
 
     def test_pr_reopened(self):
@@ -276,7 +276,7 @@ class TestReviewMode:
             entity_head_ref="feature-branch",
             has_comment=False,
         )
-        result = detect_mode(ctx, trigger_phrase="@mistral")
+        result = detect_mode(ctx, trigger_phrase="@mistralai")
         assert result.mode == Mode.REVIEW
 
     def test_pr_ready_for_review(self):
@@ -287,7 +287,7 @@ class TestReviewMode:
             entity_head_ref="feature-branch",
             has_comment=False,
         )
-        result = detect_mode(ctx, trigger_phrase="@mistral")
+        result = detect_mode(ctx, trigger_phrase="@mistralai")
         assert result.mode == Mode.REVIEW
 
     def test_pr_with_custom_prompt_uses_agent_mode(self):
@@ -392,9 +392,9 @@ class TestPRReviewSubmitted:
             event_name=EventType.PULL_REQUEST_REVIEW,
             action="submitted",
             entity_type=EntityType.PULL_REQUEST,
-            comment_body="@mistral can you look at the edge cases?",
+            comment_body="@mistralai can you look at the edge cases?",
         )
-        result = detect_mode(ctx, trigger_phrase="@mistral")
+        result = detect_mode(ctx, trigger_phrase="@mistralai")
         assert result.mode == Mode.TAG
 
     def test_review_without_trigger_skips(self):
@@ -404,7 +404,7 @@ class TestPRReviewSubmitted:
             entity_type=EntityType.PULL_REQUEST,
             comment_body="LGTM, looks good to me",
         )
-        result = detect_mode(ctx, trigger_phrase="@mistral")
+        result = detect_mode(ctx, trigger_phrase="@mistralai")
         assert result.mode == Mode.SKIP
 
 
@@ -420,7 +420,7 @@ class TestEdgeCases:
             action="created",
             comment_body="",
         )
-        result = detect_mode(ctx, trigger_phrase="@mistral")
+        result = detect_mode(ctx, trigger_phrase="@mistralai")
         assert result.mode == Mode.SKIP
 
     def test_trigger_phrase_as_substring(self):
@@ -428,27 +428,27 @@ class TestEdgeCases:
         ctx = _make_context(
             event_name=EventType.ISSUE_COMMENT,
             action="created",
-            comment_body="Hey @mistral, fix the tests",
+            comment_body="Hey @mistralai, fix the tests",
         )
-        result = detect_mode(ctx, trigger_phrase="@mistral")
+        result = detect_mode(ctx, trigger_phrase="@mistralai")
         assert result.mode == Mode.TAG
 
     def test_no_entity_on_issue_comment(self):
         ctx = _make_context(
             event_name=EventType.ISSUE_COMMENT,
             action="created",
-            comment_body="@mistral hello",
+            comment_body="@mistralai hello",
             has_entity=False,
         )
-        result = detect_mode(ctx, trigger_phrase="@mistral")
+        result = detect_mode(ctx, trigger_phrase="@mistralai")
         assert result.mode == Mode.TAG
 
     def test_mode_result_has_reason(self):
         ctx = _make_context(
             event_name=EventType.ISSUE_COMMENT,
             action="created",
-            comment_body="@mistral implement this",
+            comment_body="@mistralai implement this",
         )
-        result = detect_mode(ctx, trigger_phrase="@mistral")
+        result = detect_mode(ctx, trigger_phrase="@mistralai")
         assert result.reason
         assert len(result.reason) > 0

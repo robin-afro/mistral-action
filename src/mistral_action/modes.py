@@ -9,7 +9,7 @@ from mistral_action.context import EntityType, EventType, GitHubContext
 
 
 class Mode(Enum):
-    TAG = "tag"  # Triggered by @mistral mention in issue/PR comment
+    TAG = "tag"  # Triggered by @mistralai mention in issue/PR comment
     REVIEW = "review"  # Triggered by PR open/sync for automatic review
     AGENT = "agent"  # Triggered by custom prompt (workflow_dispatch, schedule, etc.)
     SKIP = "skip"  # No action needed
@@ -44,7 +44,7 @@ def _check_label_trigger(context: GitHubContext, label_trigger: str) -> bool:
 
 def detect_mode(
     context: GitHubContext,
-    trigger_phrase: str = "@mistral",
+    trigger_phrase: str = "@mistralai",
     assignee_trigger: str = "",
     label_trigger: str = "mistral",
     custom_prompt: str = "",

@@ -1,7 +1,7 @@
 [project]
 name = "mistral-action"
 version = "0.1.0"
-description = "GitHub Action that brings Mistral Vibe AI agent into your GitHub workflow — PR reviews, issue resolution, and custom automation via @mistral mentions."
+description = "GitHub Action that brings Mistral Vibe AI agent into your GitHub workflow — PR reviews, issue resolution, and custom automation via @mistralai mentions."
 readme = "README.md"
 authors = [
     { name = "robin.afro", email = "193246771+robin-afro@users.noreply.github.com" }

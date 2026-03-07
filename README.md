@@ -1,6 +1,6 @@
 # Mistral Action
 
-GitHub automation powered by [Mistral Vibe](https://github.com/mistralai/mistral-vibe). Brings Mistral's AI coding agent into your GitHub workflow — PR reviews, issue resolution, and custom automation via `@mistral` mentions.
+GitHub automation powered by [Mistral Vibe](https://github.com/mistralai/mistral-vibe). Brings Mistral's AI coding agent into your GitHub workflow — PR reviews, issue resolution, and custom automation via `@mistralai` mentions.
 
 Built as a direct analog to [anthropics/claude-code-action](https://github.com/anthropics/claude-code-action), but for Mistral models.
 
@@ -62,12 +62,12 @@ permissions:
 jobs:
   mistral:
     runs-on: ubuntu-latest
-    # Only run if the comment contains @mistral (for comment events)
+    # Only run if the comment contains @mistralai (for comment events)
     # or always run for PR/issue events
     if: >
       github.event_name == 'pull_request' ||
       github.event_name == 'issues' ||
-      contains(github.event.comment.body, '@mistral')
+      contains(github.event.comment.body, '@mistralai')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -80,8 +80,8 @@ jobs:
 
 ### 3. Use it
 
-- **Comment `@mistral` on an issue** — Mistral reads the issue, creates a branch, implements the changes, and opens a PR.
-- **Comment `@mistral` on a PR** — Mistral reads the diff and conversation, then pushes fixes or answers questions.
+- **Comment `@mistralai` on an issue** — Mistral reads the issue, creates a branch, implements the changes, and opens a PR.
+- **Comment `@mistralai` on a PR** — Mistral reads the diff and conversation, then pushes fixes or answers questions.
 - **Open a PR** — Mistral automatically reviews the diff and posts feedback.
 
 ## Modes
@@ -90,7 +90,7 @@ The action auto-detects which mode to run based on the GitHub event:
 
 | Mode | Trigger | What happens |
 |------|---------|-------------|
-| **Tag** | `@mistral` in a comment or issue body | Reads context, makes changes, commits, pushes. Creates a PR if triggered from an issue. |
+| **Tag** | `@mistralai` in a comment or issue body | Reads context, makes changes, commits, pushes. Creates a PR if triggered from an issue. |
 | **Review** | PR opened / synchronized / reopened | Reads the diff and posts a code review. |
 | **Agent** | Custom `prompt` input (e.g. via `workflow_dispatch`) | Runs the prompt directly with optional entity context. |
 
@@ -100,7 +100,7 @@ The action auto-detects which mode to run based on the GitHub event:
 
 Comment on an issue:
 
-> @mistral implement this feature. Make sure to add tests.
+> @mistralai implement this feature. Make sure to add tests.
 
 Mistral will:
 1. Read the issue description and all comments
@@ -124,7 +124,7 @@ on:
 
 Comment on a PR:
 
-> @mistral the error handling in `parse_config` doesn't account for missing keys. Fix it and add a test.
+> @mistralai the error handling in `parse_config` doesn't account for missing keys. Fix it and add a test.
 
 Mistral will push a commit directly to the PR branch.
 
@@ -176,7 +176,7 @@ jobs:
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
 | `mistral_api_key` | **Yes** | — | Mistral API key |
-| `trigger_phrase` | No | `@mistral` | Phrase that triggers the action in comments |
+| `trigger_phrase` | No | `@mistralai` | Phrase that triggers the action in comments |
 | `assignee_trigger` | No | — | Username that triggers when assigned |
 | `label_trigger` | No | `mistral` | Label that triggers when added |
 | `prompt` | No | — | Custom prompt / additional instructions |

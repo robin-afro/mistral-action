@@ -495,7 +495,7 @@ def main() -> None:
     logger.info("=" * 60)
 
     # Read configuration from environment (set by action.yml)
-    trigger_phrase = _env("TRIGGER_PHRASE", "@mistral")
+    trigger_phrase = _env("TRIGGER_PHRASE", "@mistralai")
     assignee_trigger = _env("ASSIGNEE_TRIGGER", "")
     label_trigger = _env("LABEL_TRIGGER", "mistral")
     custom_prompt = _env("PROMPT", "")

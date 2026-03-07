@@ -226,7 +226,7 @@ def _extract_user_request(
 def build_prompt(
     context: GitHubContext,
     mode: Mode,
-    trigger_phrase: str = "@mistral",
+    trigger_phrase: str = "@mistralai",
     custom_prompt: str = "",
     system_prompt: str = "",
     workspace: str = "",
@@ -293,7 +293,7 @@ def build_prompt(
 
         return "\n\n---\n\n".join(sections)
 
-    # --- Tag mode: triggered by @mistral mention ---
+    # --- Tag mode: triggered by @mistralai mention ---
     if mode == Mode.TAG:
         if context.entity:
             sections.append(_format_entity_context(context.entity))

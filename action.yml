@@ -1,5 +1,5 @@
 name: "Mistral Action"
-description: "GitHub automation powered by Mistral Vibe. Auto-detects mode based on event type: PR reviews, @mistral mentions, or custom automation."
+description: "GitHub automation powered by Mistral Vibe. Auto-detects mode based on event type: PR reviews, @mistralai mentions, or custom automation."
 author: "robin-afro"
 
 branding:
@@ -11,7 +11,7 @@ inputs:
   trigger_phrase:
     description: "The trigger phrase to look for in comments or issue body."
     required: false
-    default: "@mistral"
+    default: "@mistralai"
   assignee_trigger:
     description: "The assignee username that triggers the action (e.g. 'mistral'). When an issue or PR is assigned to this user, the action runs."
     required: false

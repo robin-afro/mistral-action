@@ -74,7 +74,7 @@ fi
 
 step "Configuration"
 
-DEFAULT_TRIGGER="@mistral"
+DEFAULT_TRIGGER="@mistralai"
 printf "  Trigger phrase ${DIM}[${DEFAULT_TRIGGER}]${RESET}: "
 read -r TRIGGER_PHRASE < /dev/tty
 TRIGGER_PHRASE="${TRIGGER_PHRASE:-$DEFAULT_TRIGGER}"
