@@ -61,7 +61,7 @@ WORKFLOW_FILE="$WORKFLOW_DIR/mistral.yml"
 if [[ -f "$WORKFLOW_FILE" ]]; then
     warn "Workflow already exists at $WORKFLOW_FILE"
     printf "  Overwrite? [y/N] "
-    read -r REPLY
+    read -r REPLY < /dev/tty
     if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
         info "Keeping existing workflow. Done."
         exit 0
@@ -76,7 +76,7 @@ step "Configuration"
 
 DEFAULT_TRIGGER="@mistral"
 printf "  Trigger phrase ${DIM}[${DEFAULT_TRIGGER}]${RESET}: "
-read -r TRIGGER_PHRASE
+read -r TRIGGER_PHRASE < /dev/tty
 TRIGGER_PHRASE="${TRIGGER_PHRASE:-$DEFAULT_TRIGGER}"
 
 # ---------------------------------------------------------------------------
@@ -84,7 +84,7 @@ TRIGGER_PHRASE="${TRIGGER_PHRASE:-$DEFAULT_TRIGGER}"
 # ---------------------------------------------------------------------------
 
 printf "  Auto-review PRs on open? ${DIM}[Y/n]${RESET}: "
-read -r AUTO_REVIEW
+read -r AUTO_REVIEW < /dev/tty
 if [[ "$AUTO_REVIEW" =~ ^[Nn]$ ]]; then
     REVIEW_ENABLED=false
 else
@@ -217,7 +217,7 @@ if [[ "$HAS_GH" == true && -n "$REPO_NWO" ]]; then
         ok "MISTRAL_API_KEY secret already configured"
     else
         printf "  Enter your Mistral API key ${DIM}(from console.mistral.ai)${RESET}: "
-        read -rs API_KEY
+        read -rs API_KEY < /dev/tty
         echo
 
         if [[ -n "$API_KEY" ]]; then
@@ -249,7 +249,7 @@ fi
 step "Finishing up"
 
 printf "  Commit and push changes now? ${DIM}[Y/n]${RESET}: "
-read -r DO_COMMIT
+read -r DO_COMMIT < /dev/tty
 if [[ ! "$DO_COMMIT" =~ ^[Nn]$ ]]; then
     git add "$WORKFLOW_FILE"
     [[ -f "AGENTS.md" ]] && git add "AGENTS.md"
