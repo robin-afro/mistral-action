@@ -418,3 +418,33 @@ def git_current_sha() -> str:
         check=True,
     )
     return result.stdout.strip()
+
+
+def git_has_new_commits(since_sha: str) -> bool:
+    """Check if there are any new commits since the given SHA.
+
+    Useful for detecting whether the agent committed on its own.
+    """
+    result = subprocess.run(
+        ["git", "rev-list", "--count", f"{since_sha}..HEAD"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return False
+    count = result.stdout.strip()
+    return count.isdigit() and int(count) > 0
+
+
+def git_log_since(since_sha: str, format: str = "%h %s") -> str:
+    """Get the git log between a SHA and HEAD.
+
+    Returns one line per commit in the given format.
+    Useful for building summaries of what the agent committed.
+    """
+    result = subprocess.run(
+        ["git", "log", f"--format={format}", f"{since_sha}..HEAD"],
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip() if result.returncode == 0 else ""

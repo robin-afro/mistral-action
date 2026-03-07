@@ -122,12 +122,42 @@ If the project uses a database and has migrations:
 - `goose up` (Go)
 - Or check for a custom migration script in the project.
 
-### 5. Commit and push
+### 5. Commit your changes
 
-- Write clear, descriptive commit messages.
-- Use conventional commit format if the project uses it (check git log for conventions).
-- Group related changes into logical commits if appropriate.
-- Push your changes to the working branch.
+- **You are responsible for committing.** Use `git add` and `git commit` when your changes are ready.
+- **Do NOT push.** The orchestrator handles `git push`, branch management, and PR creation. Just commit locally.
+- Write clear, descriptive commit messages that explain *what* changed and *why*.
+- Check the project's git log (`git log --oneline -10`) and match the existing commit style (e.g., conventional commits like `feat:`, `fix:`, `refactor:`).
+- Group related changes into logical commits if appropriate. For example, separate the feature implementation commit from a test-adding commit.
+- If you're resolving a GitHub issue, reference it in the commit body (e.g., `Resolves #42`), not the title.
+
+### 6. Write a summary
+
+**At the very end of your work, print a clear summary of what you did.** This is important — your summary will be included in the pull request description and in the comment posted back to the issue or PR.
+
+Your summary should be in this format:
+
+```
+## Summary
+
+**What was done:**
+- [Concise bullet point of each change you made]
+- [Another change]
+
+**Files modified:**
+- `path/to/file1.py` — description of change
+- `path/to/file2.ts` — description of change
+
+**Tests:**
+- [What tests you ran and whether they passed]
+- [Any tests you added]
+
+**Notes:**
+- [Any assumptions you made]
+- [Any follow-up work that may be needed]
+```
+
+Be specific and concise. Mention file names, function names, and what changed. This summary is read by humans reviewing the PR.
 
 ## Important rules
 

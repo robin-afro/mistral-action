@@ -40,6 +40,8 @@ from mistral_action.github_api import (
     git_current_sha,
     git_fetch_branch,
     git_has_changes,
+    git_has_new_commits,
+    git_log_since,
     git_push,
     git_setup_identity,
     update_issue_comment,
@@ -139,16 +141,34 @@ def _generate_branch_name(
 _PROGRESS_TEMPLATE = """\
 > {icon} **Mistral** is {status}...
 >
-> Triggered by @{actor} | [View run]({run_url})
+> Triggered by @{actor} · [View run]({run_url})
+"""
 
-{details}"""
-
-_COMPLETE_TEMPLATE = """\
-> {icon} **Mistral** has {status}.
+_COMPLETE_SUCCESS_TEMPLATE = """\
+> {icon} **Mistral** has finished.
 >
-> Triggered by @{actor} | [View run]({run_url})
+> Triggered by @{actor} · [View run]({run_url})
 
-{details}"""
+{pr_section}
+{branch_section}
+{summary_section}
+"""
+
+_COMPLETE_SUCCESS_NO_CHANGES_TEMPLATE = """\
+> ℹ️ **Mistral** finished without making changes.
+>
+> Triggered by @{actor} · [View run]({run_url})
+
+{summary_section}
+"""
+
+_COMPLETE_FAILURE_TEMPLATE = """\
+> {icon} **Mistral** encountered an error.
+>
+> Triggered by @{actor} · [View run]({run_url})
+
+{error_section}
+"""
 
 
 def _post_progress_comment(
@@ -179,42 +199,93 @@ def _post_progress_comment(
         return None
 
 
+def _extract_vibe_summary(output: str) -> str:
+    """Try to extract a meaningful summary from Vibe's output.
+
+    Looks for the last substantial block of assistant text.
+    Falls back to the last ~1500 chars if no clear summary is found.
+    """
+    if not output:
+        return ""
+
+    text = output.strip()
+
+    # Take the last ~1500 chars as a rough summary
+    if len(text) > 1500:
+        text = "…" + text[-1500:]
+
+    return text
+
+
 def _update_progress_comment(
     context: GitHubContext,
     comment: CommentResult,
     *,
     success: bool,
+    made_changes: bool = False,
     output_summary: str = "",
     branch_name: str = "",
     pr_url: str = "",
     error: str = "",
 ) -> None:
     """Update the progress comment with the final result."""
-    if success:
-        icon = "✅"
-        status = "finished"
-        details_parts = []
-        if pr_url:
-            details_parts.append(f"📝 Created PR: {pr_url}")
-        if branch_name:
-            details_parts.append(f"🌿 Branch: `{branch_name}`")
-        if output_summary:
-            details_parts.append(f"\n<details><summary>Output summary</summary>\n\n{output_summary}\n\n</details>")
-        details = "\n".join(details_parts)
-    else:
-        icon = "❌"
-        status = "encountered an error"
-        details = ""
-        if error:
-            details = f"```\n{error[:3000]}\n```"
 
-    body = _COMPLETE_TEMPLATE.format(
-        icon=icon,
-        status=status,
-        actor=context.actor.login,
-        run_url=context.run_url,
-        details=details,
-    )
+    if not success:
+        error_section = ""
+        if error:
+            # Truncate very long errors
+            err = error[:3000]
+            error_section = f"<details><summary>Error details</summary>\n\n```\n{err}\n```\n\n</details>"
+
+        body = _COMPLETE_FAILURE_TEMPLATE.format(
+            icon="❌",
+            actor=context.actor.login,
+            run_url=context.run_url,
+            error_section=error_section,
+        )
+    elif not made_changes:
+        summary_section = ""
+        if output_summary:
+            summary_section = (
+                "<details><summary>What Mistral did</summary>\n\n"
+                f"```\n{output_summary}\n```\n\n"
+                "</details>"
+            )
+
+        body = _COMPLETE_SUCCESS_NO_CHANGES_TEMPLATE.format(
+            actor=context.actor.login,
+            run_url=context.run_url,
+            summary_section=summary_section,
+        )
+    else:
+        pr_section = ""
+        if pr_url:
+            pr_section = f"### 📝 Pull Request\n\n**{pr_url}**\n"
+
+        branch_section = ""
+        if branch_name:
+            branch_section = f"🌿 Branch: `{branch_name}`"
+
+        summary_section = ""
+        if output_summary:
+            summary_section = (
+                "<details><summary>What Mistral did</summary>\n\n"
+                f"```\n{output_summary}\n```\n\n"
+                "</details>"
+            )
+
+        body = _COMPLETE_SUCCESS_TEMPLATE.format(
+            icon="✅",
+            actor=context.actor.login,
+            run_url=context.run_url,
+            pr_section=pr_section,
+            branch_section=branch_section,
+            summary_section=summary_section,
+        )
+
+    # Clean up excessive blank lines
+    import re
+    body = re.sub(r"\n{3,}", "\n\n", body).strip()
 
     try:
         update_issue_comment(
@@ -293,49 +364,98 @@ def _prepare_tag_mode_pr(context: GitHubContext) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _commit_and_push(branch_name: str, issue_number: int | None = None) -> str | None:
-    """If Vibe made changes, commit and push them.
+def _commit_and_push(
+    branch_name: str,
+    starting_sha: str,
+    issue_number: int | None = None,
+) -> str | None:
+    """Push any changes the agent made (commits and/or uncommitted files).
 
-    Returns the commit SHA if changes were pushed, None otherwise.
+    The agent is instructed to commit with descriptive messages itself.
+    This function handles three scenarios:
+
+    1. Agent committed AND left no uncommitted changes → just push.
+    2. Agent committed AND left uncommitted changes → fallback-commit the
+       leftovers, then push everything.
+    3. Agent did NOT commit but left uncommitted changes → fallback-commit,
+       then push.
+    4. Nothing changed at all → return None.
+
+    Returns the final HEAD SHA if anything was pushed, None otherwise.
     """
-    if not git_has_changes():
-        logger.info("No changes to commit")
+    agent_committed = git_has_new_commits(starting_sha)
+    has_uncommitted = git_has_changes()
+
+    if not agent_committed and not has_uncommitted:
+        logger.info("No changes to commit or push")
         return None
 
-    # Build commit message
-    msg = "feat: implement changes from Mistral agent"
-    if issue_number:
-        msg = f"feat: implement changes for #{issue_number}\n\nResolves #{issue_number}"
+    if agent_committed:
+        commit_log = git_log_since(starting_sha)
+        logger.info("Agent made commits:\n%s", commit_log)
 
-    sha = git_commit(msg)
-    if sha:
-        git_push(branch_name)
-        logger.info("Pushed commit %s to %s", sha, branch_name)
-    return sha
+    # Fallback-commit any leftover uncommitted changes
+    if has_uncommitted:
+        fallback_msg = "chore: commit remaining changes from Mistral agent"
+        if issue_number:
+            fallback_msg += f"\n\nRelated to #{issue_number}"
+        logger.info("Committing leftover uncommitted changes with fallback message")
+        git_commit(fallback_msg)
+
+    # Push everything
+    final_sha = git_current_sha()
+    git_push(branch_name)
+    logger.info("Pushed to %s (HEAD: %s)", branch_name, final_sha)
+    return final_sha
 
 
 def _maybe_create_pr(
     context: GitHubContext,
     branch_name: str,
     base_branch: str,
+    summary: str = "",
 ) -> str:
     """Create a PR from the branch if one doesn't exist already.
 
     Returns the PR URL, or empty string if no PR was created.
     """
     entity = context.entity
-    if not entity:
-        return ""
 
-    title = f"[Mistral] {entity.title}"
-    body_lines = [
-        f"Resolves #{entity.number}",
-        "",
-        "---",
-        "",
-        f"*Automated by [Mistral Action]({context.run_url}) triggered by @{context.actor.login}*",
-    ]
-    body = "\n".join(body_lines)
+    # Build a rich PR title
+    if entity:
+        title = f"[Mistral] {entity.title}"
+    else:
+        title = f"[Mistral] Automated changes on `{branch_name}`"
+
+    # Build a rich PR body
+    body_parts: list[str] = []
+
+    if entity:
+        body_parts.append(f"Resolves #{entity.number}")
+        body_parts.append("")
+        body_parts.append(f"> **Original issue:** {entity.title}")
+        if entity.body:
+            # Include a truncated version of the issue body for context
+            issue_excerpt = entity.body[:800].strip()
+            if len(entity.body) > 800:
+                issue_excerpt += "…"
+            body_parts.append(f"> \n> {issue_excerpt}")
+        body_parts.append("")
+
+    if summary:
+        body_parts.append("## What was done")
+        body_parts.append("")
+        body_parts.append(summary)
+        body_parts.append("")
+
+    body_parts.append("---")
+    body_parts.append("")
+    body_parts.append(
+        f"🤖 *Automated by [Mistral Action]({context.run_url}) · "
+        f"triggered by @{context.actor.login}*"
+    )
+
+    body = "\n".join(body_parts)
 
     try:
         pr_data = create_pull_request(
@@ -545,6 +665,10 @@ def main() -> None:
 
     logger.info("Prompt assembled (%d characters)", len(prompt))
 
+    # Record the starting SHA so we can detect agent commits later
+    starting_sha = git_current_sha()
+    logger.info("Starting SHA: %s", starting_sha)
+
     # Phase 7: Run Vibe
     logger.info("Phase 7: Running Mistral Vibe")
     logger.info("=" * 60)
@@ -572,16 +696,31 @@ def main() -> None:
     # Phase 8: Handle results
     logger.info("Phase 8: Handling results")
 
+    # Build a human-readable summary from Vibe's output
+    output_summary = ""
+    made_changes = False
+    if vibe_result.output:
+        output_summary = _extract_vibe_summary(vibe_result.output)
+
     if vibe_result.conclusion == Conclusion.SUCCESS:
-        # Check if Vibe made changes and commit/push them
+        # Push any commits the agent made (and fallback-commit leftovers)
         sha = _commit_and_push(
             branch_name,
+            starting_sha=starting_sha,
             issue_number=context.entity.number if context.entity else None,
         )
+        made_changes = sha is not None
 
         # Create PR if we're on a fresh branch that needs one
         if sha and needs_pr and branch_name:
-            pr_url = _maybe_create_pr(context, branch_name, base_branch)
+            # Include the agent's own commit log in the PR body
+            commit_log = git_log_since(starting_sha, format="%h %s")
+            pr_summary = output_summary
+            if commit_log:
+                pr_summary = f"### Commits\n\n```\n{commit_log}\n```\n\n{output_summary}"
+            pr_url = _maybe_create_pr(
+                context, branch_name, base_branch, summary=pr_summary,
+            )
             if pr_url:
                 _set_output("pr_url", pr_url)
         elif not sha and needs_pr:
@@ -590,20 +729,11 @@ def main() -> None:
     # Phase 9: Update progress comment
     logger.info("Phase 9: Updating progress comment")
     if progress_comment:
-        # Build a short summary from Vibe's output
-        output_summary = ""
-        if vibe_result.output:
-            # Take last ~2000 chars as summary
-            out = vibe_result.output.strip()
-            if len(out) > 2000:
-                output_summary = "..." + out[-2000:]
-            else:
-                output_summary = out
-
         _update_progress_comment(
             context,
             progress_comment,
             success=vibe_result.conclusion == Conclusion.SUCCESS,
+            made_changes=made_changes,
             output_summary=output_summary,
             branch_name=branch_name,
             pr_url=pr_url,
