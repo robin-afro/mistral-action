@@ -243,6 +243,30 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Enable "Allow GitHub Actions to create and approve pull requests"
+# ---------------------------------------------------------------------------
+
+step "Repository Permissions"
+
+if [[ "$HAS_GH" == true && -n "$REPO_NWO" ]]; then
+    info "Enabling GitHub Actions to create pull requests..."
+    if gh api "/repos/${REPO_NWO}/actions/permissions/workflow" \
+        --method PUT \
+        --input - <<< '{"default_workflow_permissions":"write","can_approve_pull_request_reviews":true}' \
+        &>/dev/null; then
+        ok "GitHub Actions can now create and approve pull requests"
+    else
+        warn "Could not update workflow permissions (you may not be an admin)."
+        info "  Enable manually: Settings → Actions → General → Workflow permissions"
+        info "  Check: \"Allow GitHub Actions to create and approve pull requests\""
+    fi
+else
+    warn "Skipped (gh CLI not available)."
+    info "  Enable manually: Settings → Actions → General → Workflow permissions"
+    info "  Check: \"Allow GitHub Actions to create and approve pull requests\""
+fi
+
+# ---------------------------------------------------------------------------
 # Commit
 # ---------------------------------------------------------------------------
 
