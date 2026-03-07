@@ -1,0 +1,27 @@
+[project]
+name = "mistral-action"
+version = "0.1.0"
+description = "GitHub Action that brings Mistral Vibe AI agent into your GitHub workflow — PR reviews, issue resolution, and custom automation via @mistral mentions."
+readme = "README.md"
+authors = [
+    { name = "robin.afro", email = "193246771+robin-afro@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mistral_action"]
+
+[project.scripts]
+mistral-action = "mistral_action.main:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=6.0",
+]

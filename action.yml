@@ -1,0 +1,184 @@
+name: "Mistral Action"
+description: "GitHub automation powered by Mistral Vibe. Auto-detects mode based on event type: PR reviews, @mistral mentions, or custom automation."
+author: "robin-afro"
+
+branding:
+  icon: "cpu"
+  color: "orange"
+
+inputs:
+  # --- Trigger configuration ---
+  trigger_phrase:
+    description: "The trigger phrase to look for in comments or issue body."
+    required: false
+    default: "@mistral"
+  assignee_trigger:
+    description: "The assignee username that triggers the action (e.g. 'mistral'). When an issue or PR is assigned to this user, the action runs."
+    required: false
+  label_trigger:
+    description: "The label that triggers the action (e.g. 'mistral'). When this label is added to an issue or PR, the action runs."
+    required: false
+    default: "mistral"
+
+  # --- Branch configuration ---
+  base_branch:
+    description: "The branch to use as the base when creating new branches. Defaults to the repository's default branch."
+    required: false
+  branch_prefix:
+    description: "The prefix for branches created by Mistral (e.g. 'mistral/', 'mistral-')."
+    required: false
+    default: "mistral/"
+
+  # --- Auth ---
+  mistral_api_key:
+    description: "Mistral API key for Vibe. Required."
+    required: true
+  github_token:
+    description: "GitHub token with repo and pull request permissions. Defaults to the automatic GITHUB_TOKEN."
+    required: false
+
+  # --- Vibe configuration ---
+  prompt:
+    description: "Custom prompt / instructions for Vibe. In agent mode this is the main task. In tag/review mode this is appended as additional instructions."
+    required: false
+    default: ""
+  model:
+    description: "Mistral model to use (e.g. 'devstral-small-2', 'devstral-2'). Defaults to Vibe's built-in default."
+    required: false
+  max_turns:
+    description: "Maximum number of assistant turns before the session stops."
+    required: false
+  max_price:
+    description: "Maximum cost limit in dollars. The session is interrupted if cost exceeds this."
+    required: false
+  vibe_args:
+    description: "Additional arguments to pass directly to the Vibe CLI (space-separated)."
+    required: false
+    default: ""
+  timeout_seconds:
+    description: "Maximum runtime in seconds for the Vibe session."
+    required: false
+    default: "1800"
+  output_format:
+    description: "Vibe output format: 'text', 'json', or 'streaming'."
+    required: false
+    default: "text"
+  system_prompt_path:
+    description: "Path to a custom system prompt file. Overrides the built-in system prompt."
+    required: false
+
+  # --- Permission / security ---
+  allowed_users:
+    description: "Comma-separated list of usernames allowed to trigger the action, or '*' to allow all. Empty (default) checks repository write permission."
+    required: false
+    default: ""
+  allowed_bots:
+    description: "Comma-separated list of allowed bot usernames, or '*' to allow all bots. Empty (default) allows no bots."
+    required: false
+    default: ""
+
+  # --- Git identity ---
+  bot_name:
+    description: "Git username for commits made by the action."
+    required: false
+    default: "mistral[bot]"
+  bot_email:
+    description: "Git email for commits made by the action."
+    required: false
+    default: "mistral[bot]@users.noreply.github.com"
+
+  # --- Python / Vibe install ---
+  install_python:
+    description: "Whether to install Python (set to 'false' if your runner already has Python 3.12+)."
+    required: false
+    default: "true"
+  python_version:
+    description: "Python version to install. Defaults to the version pinned by the action."
+    required: false
+
+  # --- Output control ---
+  log_level:
+    description: "Log level for the orchestration layer: DEBUG, INFO, WARNING, ERROR."
+    required: false
+    default: "INFO"
+
+outputs:
+  conclusion:
+    description: "Result of the action: 'success', 'failure', 'timeout', or 'skipped'."
+    value: ${{ steps.orchestrate.outputs.conclusion }}
+  branch_name:
+    description: "The branch created or used by the action."
+    value: ${{ steps.orchestrate.outputs.branch_name }}
+  pr_url:
+    description: "URL of the pull request created by the action (if any)."
+    value: ${{ steps.orchestrate.outputs.pr_url }}
+
+runs:
+  using: "composite"
+  steps:
+    # --- Step 1: Install Python ---
+    - name: Install Python (pinned version)
+      if: inputs.install_python == 'true' && inputs.python_version == ''
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+      with:
+        python-version-file: ${{ github.action_path }}/.python-version
+
+    - name: Install Python (custom version)
+      if: inputs.install_python == 'true' && inputs.python_version != ''
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+      with:
+        python-version: ${{ inputs.python_version }}
+
+    # --- Step 2: Install uv ---
+    - name: Install uv
+      uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+
+    # --- Step 3: Install action dependencies + Vibe ---
+    - name: Install Mistral Action and Vibe
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: |
+        echo "::group::Installing Mistral Action dependencies"
+        uv sync --locked
+        echo "::endgroup::"
+
+        echo "::group::Installing Mistral Vibe"
+        uv tool install mistral-vibe || echo "Vibe may already be installed"
+        echo "::endgroup::"
+
+    # --- Step 4: Run the orchestrator ---
+    - name: Run Mistral Action
+      id: orchestrate
+      shell: bash
+      env:
+        # Trigger config
+        TRIGGER_PHRASE: ${{ inputs.trigger_phrase }}
+        ASSIGNEE_TRIGGER: ${{ inputs.assignee_trigger }}
+        LABEL_TRIGGER: ${{ inputs.label_trigger }}
+        # Branch config
+        BASE_BRANCH: ${{ inputs.base_branch }}
+        BRANCH_PREFIX: ${{ inputs.branch_prefix }}
+        # Auth
+        MISTRAL_API_KEY: ${{ inputs.mistral_api_key }}
+        GITHUB_TOKEN: ${{ inputs.github_token || github.token }}
+        GH_TOKEN: ${{ inputs.github_token || github.token }}
+        # Vibe config
+        PROMPT: ${{ inputs.prompt }}
+        MODEL: ${{ inputs.model }}
+        MAX_TURNS: ${{ inputs.max_turns }}
+        MAX_PRICE: ${{ inputs.max_price }}
+        VIBE_ARGS: ${{ inputs.vibe_args }}
+        TIMEOUT_SECONDS: ${{ inputs.timeout_seconds }}
+        OUTPUT_FORMAT: ${{ inputs.output_format }}
+        SYSTEM_PROMPT_PATH: ${{ inputs.system_prompt_path }}
+        # Permissions
+        ALLOWED_USERS: ${{ inputs.allowed_users }}
+        ALLOWED_BOTS: ${{ inputs.allowed_bots }}
+        # Git identity
+        BOT_NAME: ${{ inputs.bot_name }}
+        BOT_EMAIL: ${{ inputs.bot_email }}
+        # Logging
+        LOG_LEVEL: ${{ inputs.log_level }}
+      run: |
+        cd "${{ github.workspace }}"
+        uv run --directory "${{ github.action_path }}" python -m mistral_action.main
