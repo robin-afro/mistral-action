@@ -14,7 +14,7 @@ import logging
 import os
 import shutil
 import subprocess
-import tempfile
+
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -123,14 +123,16 @@ def install_vibe() -> str:
     return vibe_path
 
 
-def _build_command(vibe_path: str, config: VibeConfig, prompt_file: str) -> list[str]:
-    """Build the vibe command line from config."""
+def _build_command(vibe_path: str, config: VibeConfig, prompt: str) -> list[str]:
+    """Build the vibe command line from config.
+
+    ``prompt`` should be a *short* string (the bootstrap prompt) that fits
+    within the OS argument-length limit.  The real payload lives in a file
+    that the bootstrap prompt tells Vibe to read.
+    """
     cmd = [vibe_path]
 
-    # Programmatic mode: use -p with the prompt file path to avoid shell escaping
-    # We write the prompt to a file and use bash process substitution or just pass it
-    # Actually, vibe --prompt reads from the argument, so we pass the file content via -p
-    cmd.extend(["-p", f"@{prompt_file}"])
+    cmd.extend(["--prompt", prompt])
 
     if config.auto_approve:
         cmd.append("--auto-approve")
@@ -159,11 +161,21 @@ def _build_command(vibe_path: str, config: VibeConfig, prompt_file: str) -> list
     return cmd
 
 
+# Name of the prompt file written into the workspace so vibe can read_file it.
+PROMPT_FILENAME = ".mistral-action-prompt.md"
+
+
 def run_vibe(config: VibeConfig) -> VibeResult:
     """Run Vibe in programmatic/headless mode and return the result.
 
-    Writes the prompt to a temp file to avoid shell escaping issues with
-    large multi-line prompts, then invokes vibe with --prompt.
+    Large prompts (>100 KB) can't be passed as CLI arguments because of the
+    kernel's ARG_MAX limit.  Instead we:
+
+    1. Write the full prompt to a file inside the workspace.
+    2. Pass a short *bootstrap* prompt that tells Vibe to read that file.
+    3. Vibe uses its built-in ``read_file`` tool, loads the instructions,
+       and proceeds as normal.
+    4. We clean up the file afterwards.
     """
     # Install if needed
     try:
@@ -174,61 +186,33 @@ def run_vibe(config: VibeConfig) -> VibeResult:
             error=f"Failed to install Vibe: {exc}",
         )
 
-    # Write prompt to a temp file
-    prompt_file_path = ""
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            suffix=".md",
-            prefix="mistral-action-prompt-",
-            delete=False,
-        ) as f:
-            f.write(config.prompt)
-            prompt_file_path = f.name
+    # Resolve the workspace directory (where the repo is checked out)
+    workdir = config.workdir or os.getcwd()
+    prompt_file_path = os.path.join(workdir, PROMPT_FILENAME)
 
+    try:
+        # Write the full prompt into the workspace so vibe's read_file can see it
+        Path(prompt_file_path).write_text(config.prompt, encoding="utf-8")
         logger.info(
-            "Prompt written to %s (%d chars)",
-            prompt_file_path,
-            len(config.prompt),
+            "Prompt written to %s (%d chars)", prompt_file_path, len(config.prompt),
         )
 
-        # Vibe's -p flag takes a string, not a file reference.
-        # Read it back and pass directly.
-        cmd = [vibe_path]
-        cmd.extend(["--prompt", config.prompt])
+        # Build a tiny bootstrap prompt that fits comfortably in ARG_MAX
+        bootstrap_prompt = (
+            f"Your full task instructions are in the file `{PROMPT_FILENAME}` "
+            f"in the current working directory. "
+            f"Read that file NOW with read_file, then follow every instruction in it."
+        )
 
-        if config.auto_approve:
-            cmd.append("--auto-approve")
+        # Assemble the command
+        cmd = _build_command(vibe_path, config, bootstrap_prompt)
 
-        if config.model:
-            cmd.extend(["--model", config.model])
+        # Log (safe — the bootstrap prompt is short)
+        logger.info("Running: %s", " ".join(cmd))
 
-        if config.max_turns is not None:
-            cmd.extend(["--max-turns", str(config.max_turns)])
-
-        if config.max_price is not None:
-            cmd.extend(["--max-price", str(config.max_price)])
-
-        if config.output_format and config.output_format != "text":
-            cmd.extend(["--output", config.output_format])
-
-        if config.workdir:
-            cmd.extend(["--workdir", config.workdir])
-
-        for tool in config.enabled_tools:
-            cmd.extend(["--enabled-tools", tool])
-
-        cmd.extend(config.extra_args)
-
-        # Log command (without the full prompt for readability)
-        cmd_display = [c if len(c) < 200 else c[:200] + "..." for c in cmd]
-        logger.info("Running: %s", " ".join(cmd_display))
-
-        # Set up environment
+        # Environment
         env = os.environ.copy()
         env["MISTRAL_API_KEY"] = config.api_key
-
-        # Suppress interactive features
         env["CI"] = "true"
         env["TERM"] = "dumb"
 
@@ -240,7 +224,7 @@ def run_vibe(config: VibeConfig) -> VibeResult:
                 text=True,
                 timeout=config.timeout_seconds,
                 env=env,
-                cwd=config.workdir or None,
+                cwd=workdir,
             )
         except subprocess.TimeoutExpired:
             logger.error("Vibe timed out after %d seconds", config.timeout_seconds)
@@ -279,9 +263,8 @@ def run_vibe(config: VibeConfig) -> VibeResult:
             )
 
     finally:
-        # Clean up temp file
-        if prompt_file_path:
-            try:
-                os.unlink(prompt_file_path)
-            except OSError:
-                pass
+        # Clean up the prompt file so it doesn't get committed
+        try:
+            os.unlink(prompt_file_path)
+        except OSError:
+            pass

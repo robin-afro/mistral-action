@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import subprocess
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class EventType(Enum):
@@ -128,6 +132,26 @@ def _parse_actor(data: dict[str, Any] | None) -> Actor:
     )
 
 
+def _fetch_full_pr(owner: str, repo: str, pr_number: int) -> dict[str, Any] | None:
+    """Fetch full PR data from the API when the event payload only has a stub.
+
+    When issue_comment fires on a PR, the payload has the PR under
+    issue.pull_request as just { "url": "...", "html_url": "..." } —
+    no head/base branch info. We need to call the API to get the full object.
+    """
+    try:
+        result = subprocess.run(
+            ["gh", "api", f"/repos/{owner}/{repo}/pulls/{pr_number}"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return json.loads(result.stdout)
+    except Exception:
+        logger.warning("Failed to fetch full PR #%d data", pr_number, exc_info=True)
+    return None
+
+
 def _parse_entity(event: dict[str, Any], event_name: EventType) -> Entity | None:
     """Extract the issue or PR from the event payload."""
     pr_data = event.get("pull_request")
@@ -136,6 +160,8 @@ def _parse_entity(event: dict[str, Any], event_name: EventType) -> Entity | None
     # For issue_comment events, check if the issue is actually a PR
     if event_name == EventType.ISSUE_COMMENT and issue_data:
         if issue_data.get("pull_request"):
+            # The issue payload only has a PR stub — build what we can from issue_data,
+            # then enrich with full PR data below in _enrich_pr_entity()
             return _build_entity(issue_data, EntityType.PULL_REQUEST)
         return _build_entity(issue_data, EntityType.ISSUE)
 
@@ -255,12 +281,45 @@ def parse_github_context() -> GitHubContext:
     repository = os.environ.get("GITHUB_REPOSITORY", "")
     run_url = f"{server_url}/{repository}/actions/runs/{run_id}" if run_id else ""
 
+    repo_obj = _parse_repo(raw_event)
+    entity = _parse_entity(raw_event, event_name)
+
+    # Enrich PR entity with full data when the event payload only has a stub
+    # (e.g. issue_comment on a PR — head_ref/base_ref will be empty)
+    if (
+        entity is not None
+        and entity.entity_type == EntityType.PULL_REQUEST
+        and not entity.head_ref
+        and repo_obj.owner
+        and repo_obj.name
+        and entity.number
+    ):
+        logger.info(
+            "PR #%d has no head_ref — fetching full PR data from API",
+            entity.number,
+        )
+        full_pr = _fetch_full_pr(repo_obj.owner, repo_obj.name, entity.number)
+        if full_pr:
+            head = full_pr.get("head", {})
+            base = full_pr.get("base", {})
+            entity.head_ref = head.get("ref", "")
+            entity.base_ref = base.get("ref", "")
+            entity.diff_url = full_pr.get("diff_url", entity.diff_url)
+            logger.info(
+                "Enriched PR #%d: head=%s base=%s",
+                entity.number,
+                entity.head_ref,
+                entity.base_ref,
+            )
+        else:
+            logger.warning("Could not fetch full PR data for #%d", entity.number)
+
     return GitHubContext(
         event_name=event_name,
         action=action,
         actor=actor,
-        repository=_parse_repo(raw_event),
-        entity=_parse_entity(raw_event, event_name),
+        repository=repo_obj,
+        entity=entity,
         comment=_parse_comment(raw_event, event_name),
         run_id=run_id,
         run_url=run_url,
