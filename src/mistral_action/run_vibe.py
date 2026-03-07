@@ -191,6 +191,20 @@ def run_vibe(config: VibeConfig) -> VibeResult:
     prompt_file_path = os.path.join(workdir, PROMPT_FILENAME)
 
     try:
+        # Add the prompt file to .git/info/exclude so that `git add -A` can
+        # never stage it — even if Vibe commits before we clean up.
+        # .git/info/exclude works like .gitignore but is local-only and
+        # never committed itself.
+        git_exclude = os.path.join(workdir, ".git", "info", "exclude")
+        try:
+            existing = Path(git_exclude).read_text() if Path(git_exclude).exists() else ""
+            if PROMPT_FILENAME not in existing:
+                with open(git_exclude, "a") as f:
+                    f.write(f"\n# Mistral Action prompt file — never commit\n{PROMPT_FILENAME}\n")
+                logger.info("Added %s to .git/info/exclude", PROMPT_FILENAME)
+        except OSError:
+            logger.warning("Could not write to .git/info/exclude — prompt file may be committable")
+
         # Write the full prompt into the workspace so vibe's read_file can see it
         Path(prompt_file_path).write_text(config.prompt, encoding="utf-8")
         logger.info(
