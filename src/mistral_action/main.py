@@ -396,6 +396,16 @@ def main() -> None:
     # Phase 1: Parse GitHub context
     logger.info("Phase 1: Parsing GitHub context")
     context = parse_github_context()
+
+    # chdir into the workspace immediately so every git / file operation
+    # runs inside the repo checkout.  uv run --directory sets cwd to the
+    # *action's* directory for dependency resolution, which means all
+    # subprocess calls (git, gh, etc.) would otherwise run from the wrong place.
+    workspace = context.workspace
+    if workspace and os.path.isdir(workspace):
+        os.chdir(workspace)
+        logger.info("Changed working directory to workspace: %s", workspace)
+
     logger.info(
         "Event: %s/%s | Actor: %s | Repo: %s",
         context.event_name.value,
