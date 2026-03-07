@@ -337,9 +337,14 @@ def create_pr_review(
 
 
 def git_setup_identity(name: str = "mistral[bot]", email: str = "mistral[bot]@users.noreply.github.com") -> None:
-    """Configure git identity for commits."""
-    subprocess.run(["git", "config", "user.name", name], check=True, capture_output=True)
-    subprocess.run(["git", "config", "user.email", email], check=True, capture_output=True)
+    """Configure git identity for commits.
+
+    Uses --global so the command works regardless of the current working
+    directory (the action's composite steps may run from the action path,
+    not the workspace).
+    """
+    subprocess.run(["git", "config", "--global", "user.name", name], check=True, capture_output=True)
+    subprocess.run(["git", "config", "--global", "user.email", email], check=True, capture_output=True)
 
 
 def git_checkout_new_branch(branch_name: str) -> None:

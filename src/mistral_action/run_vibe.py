@@ -135,7 +135,7 @@ def _build_command(vibe_path: str, config: VibeConfig, prompt: str) -> list[str]
     cmd.extend(["--prompt", prompt])
 
     if config.auto_approve:
-        cmd.append("--auto-approve")
+        cmd.extend(["--agent", "auto-approve"])
 
     if config.model:
         cmd.extend(["--model", config.model])
