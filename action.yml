@@ -164,7 +164,7 @@ runs:
         GH_TOKEN: ${{ inputs.github_token || github.token }}
         # Vibe config
         PROMPT: ${{ inputs.prompt }}
-        MODEL: ${{ inputs.model }}
+        MODEL: ${{ inputs.model || secrets.MISTRAL_MODEL }}
         MAX_TURNS: ${{ inputs.max_turns }}
         MAX_PRICE: ${{ inputs.max_price }}
         VIBE_ARGS: ${{ inputs.vibe_args }}
