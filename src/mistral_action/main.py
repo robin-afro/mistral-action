@@ -476,6 +476,75 @@ def _maybe_create_pr(
 
 
 # ---------------------------------------------------------------------------
+# Helper functions for special cases
+# ---------------------------------------------------------------------------
+
+
+def _is_model_query(context: GitHubContext, trigger_phrase: str) -> bool:
+    """Check if the user is asking about the model."""
+    if not context.comment and not context.entity:
+        return False
+    
+    # Get the text from comment or entity body
+    text = ""
+    if context.comment:
+        text = context.comment.body
+    elif context.entity:
+        text = context.entity.body
+    
+    # Check for model-related questions (case insensitive)
+    text_lower = text.lower()
+    trigger_lower = trigger_phrase.lower()
+    
+    # Remove trigger phrase for cleaner matching
+    cleaned_text = text_lower.replace(trigger_lower, "").strip()
+    
+    # Check for various ways to ask about the model
+    model_questions = [
+        "what model are you",
+        "which model are you",
+        "what model is this",
+        "which model is this",
+        "what model you are",
+        "which model you are",
+        "model are you",
+        "model you are",
+        "what model",
+        "which model",
+    ]
+    
+    return any(question in cleaned_text for question in model_questions)
+
+
+def _respond_to_model_query(context: GitHubContext, model: str) -> None:
+    """Respond directly to model queries without running Vibe."""
+    if not context.entity:
+        logger.warning("No entity found to respond to")
+        return
+    
+    # Determine the effective model name
+    effective_model = model if model else "devstral-small-2507 (default)"
+    
+    # Create response
+    response = (
+        f"🤖 *Hello! I'm running on the **{effective_model}** model.* 🚀\n\n"
+        f"This is a Mistral AI model integrated with GitHub Actions through [Mistral Action](https://github.com/robin-afro/mistral-action)."
+    )
+    
+    # Post the response as a comment
+    try:
+        create_issue_comment(
+            context.repository.owner,
+            context.repository.name,
+            context.entity.number,
+            response,
+        )
+        logger.info("Posted model information response")
+    except Exception as exc:
+        logger.error("Failed to post model information: %s", exc)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -556,6 +625,13 @@ def main() -> None:
     if mode_result.mode == Mode.SKIP:
         logger.info("Skipping — no action needed")
         _set_output("conclusion", "skipped")
+        return
+
+    # Special case: respond to "what model are you?" without running Vibe
+    if _is_model_query(context, trigger_phrase):
+        logger.info("Detected model query — responding directly")
+        _respond_to_model_query(context, model)
+        _set_output("conclusion", "success")
         return
 
     # Phase 3: Check permissions
