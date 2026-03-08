@@ -193,7 +193,18 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Set up the secret (if gh CLI is available)
+# Ask: which Mistral model?
+# ---------------------------------------------------------------------------
+
+step "Mistral Model Setup"
+
+DEFAULT_MODEL="devstral-small-2507"
+printf "  Mistral model ${DIM}[${DEFAULT_MODEL}]${RESET}: "
+read -r MISTRAL_MODEL < /dev/tty
+MISTRAL_MODEL="${MISTRAL_MODEL:-$DEFAULT_MODEL}"
+
+# ---------------------------------------------------------------------------
+# Set up the secrets (if gh CLI is available)
 # ---------------------------------------------------------------------------
 
 step "API Key Setup"
@@ -211,6 +222,19 @@ if [[ "$HAS_GH" == true && -n "$REPO_NWO" ]]; then
     SECRET_EXISTS=false
     if gh secret list --repo "$REPO_NWO" 2>/dev/null | grep -q "MISTRAL_API_KEY"; then
         SECRET_EXISTS=true
+    fi
+
+    # Check if model secret already exists
+    MODEL_SECRET_EXISTS=false
+    if gh secret list --repo "$REPO_NWO" 2>/dev/null | grep -q "MISTRAL_MODEL"; then
+        MODEL_SECRET_EXISTS=true
+    fi
+
+    if [[ "$MODEL_SECRET_EXISTS" == true ]]; then
+        ok "MISTRAL_MODEL secret already configured"
+    else
+        echo "$MISTRAL_MODEL" | gh secret set MISTRAL_MODEL --repo "$REPO_NWO"
+        ok "MISTRAL_MODEL secret set to: $MISTRAL_MODEL"
     fi
 
     if [[ "$SECRET_EXISTS" == true ]]; then
@@ -235,11 +259,14 @@ else
     info "Add your Mistral API key as a repository secret:"
     if [[ -n "$REPO_NWO" ]]; then
         info "  gh secret set MISTRAL_API_KEY --repo $REPO_NWO"
+        info "  gh secret set MISTRAL_MODEL --repo $REPO_NWO"
     else
         info "  gh secret set MISTRAL_API_KEY"
+        info "  gh secret set MISTRAL_MODEL"
     fi
     info "  or go to: Settings → Secrets and variables → Actions → New repository secret"
     info "  Get a key at: https://console.mistral.ai"
+    info "  Model: $MISTRAL_MODEL"
 fi
 
 # ---------------------------------------------------------------------------
@@ -281,7 +308,8 @@ if [[ ! "$DO_COMMIT" =~ ^[Nn]$ ]]; then
     git commit -m "ci: add Mistral Action workflow
 
 Adds GitHub Actions workflow for Mistral Vibe AI agent.
-Trigger: ${TRIGGER_PHRASE} in issues/PRs$(if [[ "$REVIEW_ENABLED" == true ]]; then echo "
+Trigger: ${TRIGGER_PHRASE} in issues/PRs
+Model: ${MISTRAL_MODEL}$(if [[ "$REVIEW_ENABLED" == true ]]; then echo "
 Auto-review: enabled for new PRs"; fi)"
 
     git push origin "$(git branch --show-current)" 2>&1 || {
@@ -304,6 +332,7 @@ info "Try it out:"
 info "  1. Create an issue and comment: ${BOLD}${TRIGGER_PHRASE} implement a hello world endpoint${RESET}"
 info "  2. Open a PR to get an automatic review"
 info "  3. Comment on a PR: ${BOLD}${TRIGGER_PHRASE} fix the failing test${RESET}"
+info "  Model: ${MISTRAL_MODEL}"
 echo
 info "Customize your agent's behavior by editing AGENTS.md"
 echo
