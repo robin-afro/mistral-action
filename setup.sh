@@ -198,7 +198,7 @@ fi
 
 step "Mistral Model Setup"
 
-DEFAULT_MODEL="devstral-2"
+DEFAULT_MODEL="devstral-small-2507"
 printf "  Mistral model ${DIM}[${DEFAULT_MODEL}]${RESET}: "
 read -r MISTRAL_MODEL < /dev/tty
 MISTRAL_MODEL="${MISTRAL_MODEL:-$DEFAULT_MODEL}"
